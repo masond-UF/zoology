@@ -1,14 +1,15 @@
 # 9 October 2020—Simulating lambda—David Mason ####
 library(tidyverse)
 seeds <- read.csv("seed_trap.csv", header = T)
-# Subset the data by species & treatment ####
 seeds_long <- pivot_longer(seeds, cols = 4:9, 
 													 names_to = "SPECIES", values_to = "SEEDS")
+# Subset the data by species & treatment ####
+treatment <- function(SPECIES){
+burn <- seeds_long %>% 
+	filter(TREATMENT == "BURN", SPECIES == SPECIES)
+control <- seeds_long %>% 
+	filter(TREATMENT == "CONTROL", SPECIES == SPECIES)
 
-rubus_burn <- seeds_long %>% 
-	filter(TREATMENT == "BURN", SPECIES == "RUBUS")
-rubus_control <- seeds_long %>% 
-	filter(TREATMENT == "CONTROL", SPECIES == "RUBUS")
 # Computing Likelihood for Observed Data ####
 llh_poisson <- function(lambda, y){
   # log(likelihood) by summing 
@@ -19,17 +20,19 @@ llh_poisson <- function(lambda, y){
 lambdas <- seq(0,600, by=1)
 
 # compute log-likelihood for all lambda values
-rubus_burn_ll <- sapply(lambdas,function(x){llh_poisson(x,rubus_burn$SEEDS)})
-rubus_control_ll <- sapply(lambdas,function(x){llh_poisson(x,rubus_control$SEEDS)})
+burn_ll <- sapply(lambdas,function(x){llh_poisson(x,burn$SEEDS)})
+control_ll <- sapply(lambdas,function(x){llh_poisson(x,control$SEEDS)})
 	
 # save the lambdas and log-likelihoods in a data frame
-rubus_burn_df <- data.frame(ll=rubus_burn_ll, lambda=lambdas)
-rubus_burn_df$TREATMENT <- c("BURN")
-rubus_control_df <- data.frame(ll=rubus_control_ll, lambda=lambdas)
-rubus_control_df$TREATMENT <- c("CONTROL")
+burn_df <- data.frame(ll=burn_ll, lambda=lambdas)
+burn_df$TREATMENT <- c("BURN")
+control_df <- data.frame(ll=control_ll, lambda=lambdas)
+control_df$TREATMENT <- c("CONTROL")
 
-rubus_treatment <- rbind(rubus_burn_df, rubus_control_df)
-
+treatment <- rbind(burn_df, control_df)
+return(treatment)
+}
+rubus_treatment <- treatment("RUBUS")
 # Maximum Likelihood Estimate from Observed Data ####
 rubus_treatment %>% 
   ggplot(aes(x=lambda,y=ll))+
