@@ -58,20 +58,21 @@ treatment <- function(burn,control ,plot.it=TRUE){
 
 	lambdas <- seq(0,100, by=0.01) # Create the possible lambda values
 
-	# compute log-likelihood for all lambda values
+	# compute log-likelihood of all lambda values for burn sites
 	burn.ll <- sapply(lambdas, # Run the function over each value of lambda 	
 										function(x){llh_poisson(x,burn$SEEDS)}) 
 	max.burn.ll <- max(burn.ll) # Get the max value for log likelihood
 	burn.mle <- lambdas[burn_ll==max.burn.ll] # Grab the corresponding lambda
 	burn.rel.l <- exp(burn_ll - max.burn.ll) # Relativize likelihood
 	burn.ci.cuttoff <- exp(-qchisq(p=0.95, df=1)/2) # Calculate CI cutoff
-	burn.cut.m.rell <- burn.ci.cuttoff - burn.rel.l # Pass it through
+	burn.cut.m.rell <- burn.ci.cuttoff - burn.rel.l # Pass it through the data
 	burn.ci.indices <- which(burn.cut.m.rell<0, arr.ind=TRUE) # IDs values
 	burn.len.ciind <- length(burn.ci.indices) # size/position of CI
 	burn.left.CL <- lambdas[burn.ci.indices[1]] # get the beginning
 	burn.right.CL <- lambdas[burn.ci.indices[burn.len.ciind]] # get the end
 	n.burn <- length(burn$SEEDS)
 	
+	# repeat this process for control sites
 	control_ll <- sapply(lambdas,function(x){llh_poisson(x,control$SEEDS)})
 	max.control.ll <- max(control_ll)
 	control.mle <- lambdas[control_ll==max.control.ll]
