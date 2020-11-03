@@ -101,7 +101,8 @@ treatment(burn = burn, control = control, plot.it = TRUE)
 trial.test <- treatment(SPECIES="RUBUS", burn=burn, control=control, plot.it=TRUE)
 
 # Subset the data by species & site
-site <- function(SPECIES, seeds_long){
+site <- function(site_1,site_4, site_6, site_7, site_8,
+								 site_16, site_17, plot.it=TRUE){
 	# Computing Likelihood for Observed Data ####
 	llh_poisson <- function(lambda, y){
   # log(likelihood) by summing 
