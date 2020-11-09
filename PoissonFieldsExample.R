@@ -18,7 +18,7 @@ mu2.hat <- mean(y2.vec)
 mu3.hat <- mean(y3.vec)
 mu0.hat <- mean(all.quadrats) 
 
-ln.Lo.hat <- sum(dpois(x=all.quadrats,lambda=mu0.hat,log=TRUE))
+ln.Lo.hat <- sum(dpois(x=all.quadrats,lambda=mu0.hat,log=TRUE)) # density
 
 ln.L1.hat <- sum(dpois(x=y1.vec,lambda=mu1.hat,log=TRUE)) +
 
@@ -30,10 +30,10 @@ Gsq.obs <- -2*(ln.Lo.hat-ln.L1.hat)
 
 dfs <- 3-1 # 3 parameters estimated under H1 - 1 parameter estimated under Ho
 alpha <- 0.05
-Gsq.crit <- qchisq(p=1-alpha, df=dfs)
-pvalue <- 1-pchisq(q=Gsq.obs,df=dfs)
+Gsq.crit <- qchisq(p=1-alpha, df=dfs) # quantile
+pvalue <- 1-pchisq(q=Gsq.obs,df=dfs) # cumlative
 
-Chisq.samp <- rchisq(n=100000, df=dfs)
+Chisq.samp <- rchisq(n=100000, df=dfs) # simulate random numbers
 
 hist(Chisq.samp)
 abline(v=Gsq.obs, col="blue")
