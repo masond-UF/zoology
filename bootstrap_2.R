@@ -1,4 +1,4 @@
-# 11 November 2020—Bootstrap ####
+# 11 November 2020—Bootstra
 # Set up the workspace ####
 library(tidyverse)
 
@@ -102,11 +102,27 @@ treatment <- function(burn, control ,plot.it=TRUE){
 }
 # Write a loop for running the function 1000 times and computing % success ####
 
+# Choose the difference in mean seed arrival
+pct.dec  <- 0.05 
+pct.dec  <- 0.15 
+pct.dec  <- 0.30 
+pct.dec  <- 0.50 
+pct.dec  <- 0.90 
+
+# Create vectors for lambda values
+lam.ctl.vec  <- c(5,10,50,250,500)
+lam.burn.vec <- (1-pct.dec)*lam.ctl 
+
+# Select one to run with the for loop
 lam.ctl <- lam.ctl[3]
 lam.burn <- lam.burn[3]
-samp.sizes <- seq(1:50)
+
+# Create a vector for the number of seed traps
+samp.sizes <- seq(1:50, by = 5)
+
+# Create empty objects for the for loop to fill
 vec <- vector() # empty vector for ith outcomes
-output.mat <- matrix(0, nrow = 10, ncol = 20) # empty matrix for the final output
+output.mat <- matrix(0, nrow = 50, ncol = 20) # empty matrix for the final output
 
 
 for(i in 1:10){
