@@ -101,3 +101,79 @@ out.mle <- output[[1]]
 burn.lamb.mle <- out.mle[1,3]
 control.lamb.mle <- out.mle[2,3]
 # Calculate proportion of establishment MLE ####
+# Number of trials 
+N <- 10
+burn.reps <- 21
+control.reps <- 21
+
+# Simulate the data
+burn.samp <- rbinom(n=burn.reps, size=N, prob=0.40)
+cont.samp <- rbinom(n=burn.reps, size=N, prob=0.15)
+
+# Calculate phat
+burn.p.hat <- sum(burn.samp)/(N*length(burn.samp))
+cont.p.hat <- sum(cont.samp)/(N*length(cont.samp))
+
+# Estimate seed establishment for treatments ####
+
+# Number of trials (arriving seeds) is from lambda
+burn.est <- rbinom(n=burn.reps, size=round(burn.lamb.mle), prob = burn.p.hat)
+cont.est <- rbinom(n=control.reps, size=round(control.lamb.mle), prob = cont.p.hat)
+
+# Comparing total plant establishmet by treatment ####
+
+# Likelihood function under the null
+lnLo <- function(burn,control,Ntrials){
+	
+	both.counts <- c(burn,control)
+	p.hat <- sum(both.counts)/(Ntrials*length(both.counts))
+	llikevec <- dbinom(x=both.counts, size=Ntrials, prob=p.hat, log=TRUE)
+	return(sum(llikevec))
+}
+
+# Likelihood function under the alternative
+lnL1 <- function(burn,control,Ntrials){
+	
+	phat.burn <- sum(burn)/(Ntrials*length(burn))
+	phat.cont <- sum(control)/(Ntrials*length(control))
+	
+	llike.burn <- sum(dbinom(x=burn,size=Ntrials, prob=phat.burn, log=TRUE))
+	llike.cont <- sum(dbinom(x=control,size=Ntrials, prob=phat.cont, log=TRUE))
+	
+	return(sum(c(llike.burn,llike.cont)))
+}
+
+# Computing Gsq = -2log(Lo/L1)
+lnLo.hat <- lnLo(burn=burn.est, control=cont.est, Ntrials=N)
+lnL1.hat <- lnL1(burn=burn.est, control=cont.est, Ntrials=N)
+
+Gsq <- -2*(lnLo.hat-lnL1.hat)
+alpha <- 0.001
+Gsq.crit <- qchisq(p=1-alpha, df=3-1)
+pvalue <- 1-pchisq(q=Gsq, df=3-1)
+
+# Parametric bootstrapping ####
+
+boot <- 5000
+both <- c(burn.est,cont.est)
+phat.Ho <- sum(both)/(N*length(both)); # MLE under H0 = sum(xis)/sum(nis)
+Gsq.vec <- rep(0,boot)
+for(i in 1:boot){
+	# Simulate data like the one observed but under the Null hypothesis
+
+	burn.boot <- rbinom(n=burn, size=N, prob=phat.Ho)
+	cont.boot <- rbinom(n=control, size=N, prob=phat.Ho)
+	
+	lnLo.boot <- lnLo(burn=burn.boot, control=cont.boot, Ntrials=N)	
+	lnL1.boot <- lnL1(burn=burn.boot, control=cont.boot, Ntrials=N)		
+	
+	Gsq.vec[i] <- -2*(lnLo.boot-lnL1.boot)
+	
+}
+
+boot.pval <- sum(Gsq.vec > Gsq)/2000 # Proportion of boostrap Gsq's that are bigger than the observed Gsq
+print(boot.pval) # compare to Chisquare pvalue
+print(pvalue)
+
+hist(Gsq.vec)
+abline(v=Gsq, col="red")
