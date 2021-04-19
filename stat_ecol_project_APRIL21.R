@@ -107,15 +107,14 @@ burn.reps <- 21
 control.reps <- 21
 
 # Simulate the data
-burn.samp <- rbinom(n=burn.reps, size=N, prob=0.40)
-cont.samp <- rbinom(n=burn.reps, size=N, prob=0.15)
+burn.samp <- rbinom(n=burn.reps, size=N, prob=0.6)
+cont.samp <- rbinom(n=burn.reps, size=N, prob=0.3)
 
 # Calculate phat
 burn.p.hat <- sum(burn.samp)/(N*length(burn.samp))
 cont.p.hat <- sum(cont.samp)/(N*length(cont.samp))
 
 # Estimate seed establishment for treatments ####
-
 # Number of trials (arriving seeds) is from lambda
 burn.est <- rbinom(n=burn.reps, size=round(burn.lamb.mle), prob = burn.p.hat)
 cont.est <- rbinom(n=control.reps, size=round(control.lamb.mle), prob = cont.p.hat)
@@ -123,29 +122,32 @@ cont.est <- rbinom(n=control.reps, size=round(control.lamb.mle), prob = cont.p.h
 # Comparing total plant establishmet by treatment ####
 
 # Likelihood function under the null
-lnLo <- function(burn,control,Ntrials){
+lnLo <- function(burn,control,burn.trials,con.trials){
 	
 	both.counts <- c(burn,control)
-	p.hat <- sum(both.counts)/(Ntrials*length(both.counts))
+	Ntrials <- round((burn.trials+con.trials)/2)
+	p.hat <- sum(c(burn,control))/(Ntrials*length(both.counts))
 	llikevec <- dbinom(x=both.counts, size=Ntrials, prob=p.hat, log=TRUE)
 	return(sum(llikevec))
 }
 
 # Likelihood function under the alternative
-lnL1 <- function(burn,control,Ntrials){
+lnL1 <- function(burn,control,burn.trials,con.trials){
 	
-	phat.burn <- sum(burn)/(Ntrials*length(burn))
-	phat.cont <- sum(control)/(Ntrials*length(control))
+	phat.burn <- sum(burn)/(burn.trials*length(burn))
+	phat.cont <- sum(control)/(con.trials*length(control))
 	
-	llike.burn <- sum(dbinom(x=burn,size=Ntrials, prob=phat.burn, log=TRUE))
-	llike.cont <- sum(dbinom(x=control,size=Ntrials, prob=phat.cont, log=TRUE))
+	llike.burn <- sum(dbinom(x=burn,size=round(burn.trials), prob=phat.burn, log=TRUE))
+	llike.cont <- sum(dbinom(x=cont.est,size=round(control.lamb.mle), prob=phat.cont, log=TRUE))
 	
 	return(sum(c(llike.burn,llike.cont)))
 }
 
 # Computing Gsq = -2log(Lo/L1)
-lnLo.hat <- lnLo(burn=burn.est, control=cont.est, Ntrials=N)
-lnL1.hat <- lnL1(burn=burn.est, control=cont.est, Ntrials=N)
+lnLo.hat <- lnLo(burn=burn.est, control=cont.est, 
+								 burn.trials = burn.lamb.mle, con.trials = control.lamb.mle)
+lnL1.hat <- lnL1(burn=burn.est, control=cont.est, 
+								 burn.trials = burn.lamb.mle, con.trials = control.lamb.mle)
 
 Gsq <- -2*(lnLo.hat-lnL1.hat)
 alpha <- 0.001
@@ -161,11 +163,13 @@ Gsq.vec <- rep(0,boot)
 for(i in 1:boot){
 	# Simulate data like the one observed but under the Null hypothesis
 
-	burn.boot <- rbinom(n=burn, size=N, prob=phat.Ho)
-	cont.boot <- rbinom(n=control, size=N, prob=phat.Ho)
+	burn.boot <- rbinom(n=21, size=round(burn.lamb.mle), prob=phat.Ho)
+	cont.boot <- rbinom(n=21, size=round(control.lamb.mle), prob=phat.Ho)
 	
-	lnLo.boot <- lnLo(burn=burn.boot, control=cont.boot, Ntrials=N)	
-	lnL1.boot <- lnL1(burn=burn.boot, control=cont.boot, Ntrials=N)		
+	lnLo.boot <- lnLo(burn=burn.boot, control=cont.boot,
+										 burn.trials = burn.lamb.mle, con.trials = control.lamb.mle)	
+	lnL1.boot <- lnL1(burn=burn.boot, control=cont.boot,
+										 burn.trials = burn.lamb.mle, con.trials = control.lamb.mle)		
 	
 	Gsq.vec[i] <- -2*(lnLo.boot-lnL1.boot)
 	

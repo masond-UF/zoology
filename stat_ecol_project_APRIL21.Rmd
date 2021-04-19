@@ -2,7 +2,9 @@
 title: "Modeling Plant Establishment from Ornithochory"
 author: "David S, Mason"
 date: "4/15/2021"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ## Overview

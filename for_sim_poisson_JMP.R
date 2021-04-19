@@ -36,7 +36,7 @@ pct.dec  <- 0.30
 pct.dec  <- 0.50 
 pct.dec  <- 0.90 
 
-lam.ctl  <- c(2,4,6,8,10,30,50,100)
+lam.ctl  <- c(2,4,6,8,10,30,50,100, 500)
 lam.burn <- (1-pct.dec)*lam.ctl 
 nlams <- length(lam.ctl)
 
