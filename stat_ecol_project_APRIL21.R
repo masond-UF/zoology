@@ -160,11 +160,13 @@ boot <- 5000
 both <- c(burn.est,cont.est)
 phat.Ho <- sum(both)/(N*length(both)); # MLE under H0 = sum(xis)/sum(nis)
 Gsq.vec <- rep(0,boot)
+
+	Ntrials <- round((burn.lamb.mle+control.lamb.mle)/2)
+
 for(i in 1:boot){
 	# Simulate data like the one observed but under the Null hypothesis
-
-	burn.boot <- rbinom(n=21, size=round(burn.lamb.mle), prob=phat.Ho)
-	cont.boot <- rbinom(n=21, size=round(control.lamb.mle), prob=phat.Ho)
+	burn.boot <- rbinom(n=burn.reps, size=round(burn.lamb.mle), prob=phat.Ho)
+	cont.boot <- rbinom(n=control.reps, size=round(control.lamb.mle), prob=phat.Ho)
 	
 	lnLo.boot <- lnLo(burn=burn.boot, control=cont.boot,
 										 burn.trials = burn.lamb.mle, con.trials = control.lamb.mle)	

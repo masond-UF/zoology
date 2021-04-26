@@ -3,11 +3,19 @@ title: "Modeling Plant Establishment from Ornithochory"
 author: "David S, Mason"
 date: "4/15/2021"
 output:
-  html_document: default
   pdf_document: default
+  html_document: default
 ---
 
 ## Overview
+
+*Animals track resources*
+
+*Animals disperse plants*
+
+*Disturbance creates resource pulses*
+
+*Disturbance creates favorable conditions for plant establishment*
 
 **HO: The number of plants establishing via ornithochory is the same in recent burns and 1 year rough.**
 
@@ -15,7 +23,8 @@ output:
 
 Below is a series of models using seed rain and plant establishment data in conjunction to predict the number of plants establishing from bird-mediated rain at recent burns and 1 year rough. *This model does not include density-dependent effects, which are known to influence plant population dynamics.*
 
-First, I predict mean seed arrival per m^2 (below a perch). Next, I simulate plant establishment trials (these are not completed). Then, I multiple the number of arrivng seeds by the probability of establishment to generare an estimation of establshing individuals. Finally, I bootstrap the likelihoods under the null and alternative hypotheses to assess whether a model incorporating the treatment (time since fire) better predicts plant establishment than a null model. 
+First, I predict mean seed arrival per m^2 (below a perch). Next, I simulate plant establishment trials (these are not completed). Then, I multiple the number of arrivng seeds by the probability of establishment to generare an estimated PDF of establshing individuals. Finally, I develop a framework for exploring the effects of variation in lambda and p.
+
 
 ## Set-up the workspace
 ```{r, warning=FALSE,message=FALSE}
@@ -154,37 +163,14 @@ burn.p.hat <- sum(burn.samp)/(N*length(burn.samp))
 cont.p.hat <- sum(cont.samp)/(N*length(cont.samp))
 ```
 
-## Predict seed establishment for treatments 
-```{r}
-# Simulate data using probability from simulated data
-# and the number of trials from the estimation of seed arrival
-burn.est <- rbinom(n=burn.reps, size=round(burn.lamb.mle), prob = burn.p.hat)
-cont.est <- rbinom(n=control.reps, size=round(control.lamb.mle), prob = cont.p.hat)
-```
-
 ## Generate joint PDF using mean seed arrival and probability of establishment 
 ```{r}
-# Number of trials 
-N <- 10
-burn.reps <- 21
-control.reps <- 21
-
-# Simulate the data
-burn.samp <- rbinom(n=burn.reps, size=N, prob=0.6)
-cont.samp <- rbinom(n=burn.reps, size=N, prob=0.3)
-
-# Calculate phat
-burn.p.hat <- sum(burn.samp)/(N*length(burn.samp))
-cont.p.hat <- sum(cont.samp)/(N*length(cont.samp))
-
-# Estimate seed establishment for treatments ####
-
 # Create a vector
 x <- seq(1,20)
 
 # Generate PDF 
-burn.est <- dpois(lambda=(burn.lamb.mle*burn.p.hat), x=x)
-con.est <- dpois(lambda=(control.lamb.mle*cont.p.hat), x=x)
+burn.est <- dpois(lambda=floor((burn.lamb.mle*burn.p.hat)), x=x)
+con.est <- dpois(lambda=floor((control.lamb.mle*cont.p.hat)), x=x)
 
 # Convert into data frame
 burn.est <- as.data.frame(cbind(x,burn.est))
@@ -209,67 +195,100 @@ head(est.dat)
 ```{r, echo=FALSE}
 ggplot(d=est.dat, aes(x=Plants, y=Probability, color = Treatment))+
 	geom_line(size=1.5)+
+	xlim(0,15)+
 	scale_color_manual(values=c("#22A884FF","#FCA636FF"))+
 	theme_bw()+
 	geom_vline(data=est.dat, aes(xintercept = MLE))+
 	facet_wrap(~Treatment)
 ```
-## Old stuff comparing plant establishment by treatment
+
+## Exploring different values for lambda / sample sizes
 ```{r}
-# Comparing total plant establishmet by treatment
-lnLo <- function(burn,control,Ntrials){
-	
-	both.counts <- c(burn,control)
-	p.hat <- sum(both.counts)/(Ntrials*length(both.counts))
-	llikevec <- dbinom(x=both.counts, size=Ntrials, prob=p.hat, log=TRUE)
-	return(sum(llikevec))
+change.inc <- c(0.25, 0.50, 0.75)
+change.dec <- c(-0.75,-0.50,-0.25)
+
+burn.samp.inc <- c()
+burn.samp.dec <- c()
+
+for(i in 1:3){
+	burn.samp.inc[i] <- abs((burn.lamb.mle*change.inc[i])+burn.lamb.mle)
+	burn.samp.dec[i] <- abs((burn.lamb.mle*change.dec[i])+burn.lamb.mle)
 }
 
-# Likelihood function under the alternative
-lnL1 <- function(burn,control,Ntrials){
-	
-	phat.burn <- sum(burn)/(Ntrials*length(burn))
-	phat.cont <- sum(control)/(Ntrials*length(control))
-	
-	llike.burn <- sum(dbinom(x=burn,size=Ntrials, prob=phat.burn, log=TRUE))
-	llike.cont <- sum(dbinom(x=control,size=Ntrials, prob=phat.cont, log=TRUE))
-	
-	return(sum(c(llike.burn,llike.cont)))
+burn.samp <- c(burn.samp.dec,burn.lamb.mle,burn.samp.inc)
+
+## Percent changes from the seed arrival MLE for control
+
+con.samp.inc <- c()
+con.samp.dec <- c()
+
+for(i in 1:3){
+	con.samp.inc[i] <- abs((control.lamb.mle*change.inc[i])+control.lamb.mle)
+	con.samp.dec[i] <- abs((control.lamb.mle*change.dec[i])+control.lamb.mle)
 }
 
-# Computing Gsq = -2log(Lo/L1)
-lnLo.hat <- lnLo(burn=burn.est, control=cont.est, Ntrials=N)
-lnL1.hat <- lnL1(burn=burn.est, control=cont.est, Ntrials=N)
+con.samp <- c(con.samp.dec,control.lamb.mle,con.samp.inc)
 
-Gsq <- -2*(lnLo.hat-lnL1.hat)
-alpha <- 0.001
-Gsq.crit <- qchisq(p=1-alpha, df=3-1)
-pvalue <- 1-pchisq(q=Gsq, df=3-1)
+### For loop to generate PDFs with different lambda values
 
-# Parametric bootstrapping
-boot <- 5000
-both <- c(burn.est,cont.est)
-phat.Ho <- sum(both)/(N*length(both)); # MLE under H0 = sum(xis)/sum(nis)
-Gsq.vec <- rep(0,boot)
+pdf.list <-list()
+x <- seq(1,50)
 
-for(i in 1:boot){
-	# Simulate data like the one observed but under the Null hypothesis
-
-	burn.boot <- rbinom(n=burn, size=N, prob=phat.Ho)
-	cont.boot <- rbinom(n=control, size=N, prob=phat.Ho)
+for(i in 1:length(burn.samp)){
+	burn.pdf <- dpois(lambda=floor((burn.samp[i]*burn.p.hat)), x=x)
+	con.pdf <- dpois(lambda=floor((con.samp[i]*cont.p.hat)), x=x)
 	
-	lnLo.boot <- lnLo(burn=burn.boot, control=cont.boot, Ntrials=N)	
-	lnL1.boot <- lnL1(burn=burn.boot, control=cont.boot, Ntrials=N)		
-	
-	Gsq.vec[i] <- -2*(lnLo.boot-lnL1.boot)
-	
+	# Convert into data frame
+	burn.pdf <- as.data.frame(cbind(x,burn.pdf))
+	con.pdf <- as.data.frame(cbind(x,con.pdf))
+
+	# Add treatment and MLE column
+	burn.pdf$Treatment <- "Burn"
+	con.pdf$Treatment <- "Control"
+
+	burn.pdf$MLE <- burn.samp[i]*burn.p.hat
+	con.pdf$MLE <- con.samp[i]*cont.p.hat
+
+	burn.pdf <- setNames(burn.pdf,c("Plants","Probability",
+																"Treatment", "MLE"))
+	con.pdf <- setNames(con.pdf,c("Plants","Probability",
+																"Treatment", "MLE"))
+# Combine the dataframes
+	pdf <- rbind(burn.pdf,con.pdf)
+	pdf.list[[i]] <- pdf
 }
 
-boot.pval <- sum(Gsq.vec > Gsq)/2000 # Proportion of boostrap Gsq's that are bigger than the observed Gsq
-print(boot.pval) # compare to Chisquare pvalue
-print(pvalue)
+#### Pull
+pdf1 <- pdf.list[[1]]
+pdf1$Change <- "-75%"
+
+pdf2 <- pdf.list[[2]]
+pdf2$Change <- "-50%"
+
+pdf3 <- pdf.list[[3]]
+pdf3$Change <- "-25%"
+
+pdf4 <- pdf.list[[4]]
+pdf4$Change <- "No change"
+
+pdf5 <- pdf.list[[5]]
+pdf5$Change <- "+25%"
+
+pdf6 <- pdf.list[[6]]
+pdf6$Change <- "+50%"
+
+pdf7 <- pdf.list[[7]]
+pdf7$Change <- "+75%"
+
+all.pdf <- rbind(pdf1,pdf2,pdf3,pdf5,pdf6,pdf7)
+all.pdf$Change <- as_factor(all.pdf$Change)
+all.pdf$Change <- factor(all.pdf$Change, levels = c("-75%", "-50%","-25%",
+																		 							"+25%","+50%","+75%"))
 ```
-```{r, echo=FALSE}
-hist(Gsq.vec)
-abline(v=Gsq, col="red")
+```{r, warning=FALSE,message=FALSE}
+ggplot(d=all.pdf, aes(x=Plants, y=Probability, color = Treatment))+
+	geom_line(size=1)+
+	scale_color_manual(values=c("#22A884FF","#FCA636FF"))+
+	theme_bw()+
+	facet_wrap(~Change+Treatment)
 ```

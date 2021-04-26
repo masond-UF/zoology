@@ -1,47 +1,16 @@
----
-title: "Modeling Plant Establishment from Ornithochory"
-author: "David S, Mason"
-date: "4/15/2021"
-output:
-  html_document: default
-  pdf_document: default
----
-
-## Overview
-
-**HO: The number of plants establishing via ornithochory is the same in recent burns and 1 year rough.**
-
-**HA: The number of plants establishing via ornithochory is different in recent burns than 1 year rough.**
-
-Below is a series of models using seed rain and plant establishment data in conjunction to predict the number of plants establishing from bird-mediated rain at recent burns and 1 year rough. *This model does not include density-dependent effects, which are known to influence plant population dynamics.*
-
-First, I predict mean seed arrival per m^2 (below a perch). Next, I simulate plant establishment trials (these are not completed). Then, I multiple the number of arrivng seeds by the probability of establishment to generare an estimation of establshing individuals. Finally, I bootstrap the likelihoods under the null and alternative hypotheses to assess whether a model incorporating the treatment (time since fire) better predicts plant establishment than a null model. 
-
-## Set-up the workspace
-```{r, warning=FALSE,message=FALSE}
-library(tidyverse) # load in Tidyverse to filter data
-
-```
-```{r setup}
-require(tidyverse)
-
-# Load in the data to filter data
-seeds <- read.csv("seed_trap.csv", header = T) # Bring in the data
-
-# Convert the site x species matrix into the long format
+##### David Mason ##### 14 April 2021 ##### STAT ECOL PROJ ###
+# Set-up #####
+library(tidyverse)
+seeds <- read.csv("seed_trap.csv", header = T)
 seeds_long <- pivot_longer(seeds, cols = 4:9,names_to = "SPECIES", 
 													 values_to = "SEEDS")
 
-# Filter the data by treatment (control is 1 year rough)
 burn <- seeds_long %>% 
 filter(TREATMENT == "BURN")
 control <- seeds_long %>% 
 filter(TREATMENT == "CONTROL")
-```
-
-## Calculate seed arrival MLE
-```{r}
-treatment <- function(burn,control ,plot.it=TRUE){
+# Calculate seed arrival MLE ####
+treatment <- function(burn,control ,plot.it=FALSE){
 
 	# Computing Likelihood for Observed Data ####
 	llh_poisson <- function(lambda, y){
@@ -125,45 +94,13 @@ treatment <- function(burn,control ,plot.it=TRUE){
 	
 	return(list(CIS.lambdas=out,bic.sep.model=bic.sep.model, bic.null.model=bic.null.model, outcome=outcome))
 }
-```
-```{r, echo=FALSE}
-output <- treatment(burn,control,plot.it=TRUE)
-```
-```{r}
-# Extract the MLEs
+
+output <- treatment(burn,control,plot.it = TRUE)
 out.mle <- output[[1]]
 
-# Separate the burn from control MLEs
 burn.lamb.mle <- out.mle[1,3]
 control.lamb.mle <- out.mle[2,3]
-```
-
-## Simulate plant establishment data
-```{r}
-# Number of trials 
-N <- 10
-burn.reps <- 21
-control.reps <- 21
-
-# Simulate the data
-burn.samp <- rbinom(n=burn.reps, size=N, prob=0.40)
-cont.samp <- rbinom(n=burn.reps, size=N, prob=0.16)
-
-# Calculate phat
-burn.p.hat <- sum(burn.samp)/(N*length(burn.samp))
-cont.p.hat <- sum(cont.samp)/(N*length(cont.samp))
-```
-
-## Predict seed establishment for treatments 
-```{r}
-# Simulate data using probability from simulated data
-# and the number of trials from the estimation of seed arrival
-burn.est <- rbinom(n=burn.reps, size=round(burn.lamb.mle), prob = burn.p.hat)
-cont.est <- rbinom(n=control.reps, size=round(control.lamb.mle), prob = cont.p.hat)
-```
-
-## Generate joint PDF using mean seed arrival and probability of establishment 
-```{r}
+# Calculate proportion of establishment MLE ####
 # Number of trials 
 N <- 10
 burn.reps <- 21
@@ -205,71 +142,140 @@ con.est <- setNames(con.est,c("Plants","Probability",
 # Combine the dataframes
 est.dat <- rbind(burn.est,con.est)
 head(est.dat)
-```
-```{r, echo=FALSE}
+
+# Plot the PDFs
 ggplot(d=est.dat, aes(x=Plants, y=Probability, color = Treatment))+
 	geom_line(size=1.5)+
 	scale_color_manual(values=c("#22A884FF","#FCA636FF"))+
 	theme_bw()+
 	geom_vline(data=est.dat, aes(xintercept = MLE))+
 	facet_wrap(~Treatment)
-```
-## Old stuff comparing plant establishment by treatment
-```{r}
-# Comparing total plant establishmet by treatment
-lnLo <- function(burn,control,Ntrials){
+
+# Percent changes from the seed arrival MLE for burn ####
+change.inc <- c(0.25, 0.50, 0.75)
+change.dec <- c(-0.75,-0.50,-0.25)
+
+burn.samp.inc <- c()
+burn.samp.dec <- c()
+
+for(i in 1:3){
+	burn.samp.inc[i] <- abs((burn.lamb.mle*change.inc[i])+burn.lamb.mle)
+	burn.samp.dec[i] <- abs((burn.lamb.mle*change.dec[i])+burn.lamb.mle)
+}
+
+burn.samp <- c(burn.samp.dec,burn.lamb.mle,burn.samp.inc)
+
+## Percent changes from the seed arrival MLE for control
+
+con.samp.inc <- c()
+con.samp.dec <- c()
+
+for(i in 1:3){
+	con.samp.inc[i] <- abs((control.lamb.mle*change.inc[i])+control.lamb.mle)
+	con.samp.dec[i] <- abs((control.lamb.mle*change.dec[i])+control.lamb.mle)
+}
+
+con.samp <- c(con.samp.dec,control.lamb.mle,con.samp.inc)
+
+### For loop to generate PDFs with different lambda values
+
+pdf.list <-list()
+x <- seq(1,50)
+
+for(i in 1:length(burn.samp)){
+	burn.pdf <- dpois(lambda=floor((burn.samp[i]*burn.p.hat)), x=x)
+	con.pdf <- dpois(lambda=floor((con.samp[i]*cont.p.hat)), x=x)
 	
-	both.counts <- c(burn,control)
-	p.hat <- sum(both.counts)/(Ntrials*length(both.counts))
-	llikevec <- dbinom(x=both.counts, size=Ntrials, prob=p.hat, log=TRUE)
+	# Convert into data frame
+	burn.pdf <- as.data.frame(cbind(x,burn.pdf))
+	con.pdf <- as.data.frame(cbind(x,con.pdf))
+
+	# Add treatment and MLE column
+	burn.pdf$Treatment <- "Burn"
+	con.pdf$Treatment <- "Control"
+
+	burn.pdf$MLE <- burn.samp[i]*burn.p.hat
+	con.pdf$MLE <- con.samp[i]*cont.p.hat
+
+	burn.pdf <- setNames(burn.pdf,c("Plants","Probability",
+																"Treatment", "MLE"))
+	con.pdf <- setNames(con.pdf,c("Plants","Probability",
+																"Treatment", "MLE"))
+# Combine the dataframes
+	pdf <- rbind(burn.pdf,con.pdf)
+	pdf.list[[i]] <- pdf
+}
+
+#### Pull
+pdf1 <- pdf.list[[1]]
+pdf1$Change <- "-75%"
+
+pdf2 <- pdf.list[[2]]
+pdf2$Change <- "-50%"
+
+pdf3 <- pdf.list[[3]]
+pdf3$Change <- "-25%"
+
+pdf4 <- pdf.list[[4]]
+pdf4$Change <- "No change"
+
+pdf5 <- pdf.list[[5]]
+pdf5$Change <- "+25%"
+
+pdf6 <- pdf.list[[6]]
+pdf6$Change <- "+50%"
+
+pdf7 <- pdf.list[[7]]
+pdf7$Change <- "+75%"
+
+all.pdf <- rbind(pdf1,pdf2,pdf3,pdf5,pdf6,pdf7)
+all.pdf$Change <- as_factor(all.pdf$Change)
+all.pdf$Change <- factor(all.pdf$Change, levels = c("-75%", "-50%", "-25%",
+																		 							"+25%","+50%","+75%"))
+
+
+# Plot all of them
+ggplot(d=all.pdf, aes(x=Plants, y=Probability, color = Treatment))+
+	geom_line(size=1)+
+	scale_color_manual(values=c("#22A884FF","#FCA636FF"))+
+	theme_bw()+
+	facet_wrap(~Change+Treatment)
+
+# Generate data from poisson distribution with mean lambda*proprotion
+burn.sim <- rpois(n=5000,lambda=burn.lamb.mle*burn.p.hat)
+hist(burn.sim, breaks=20)
+
+con.sim <- rpois(n=5000,lambda=control.lamb.mle*cont.p.hat)
+hist(con.sim,breaks=20)
+
+# H0: mu1 = mu2
+# HA: mu1 != mu2
+
+lnLo <- function(burn.sim,con.sim){
+	
+	all.counts <- c(burn.sim,con.sim)
+	lambda.hat <- sum(all.counts)/length(all.counts)
+	llikevec <- dpois(x=all.counts, lambda = lambda.hat, log=TRUE)
 	return(sum(llikevec))
 }
 
-# Likelihood function under the alternative
-lnL1 <- function(burn,control,Ntrials){
+lnL1 <- function(burn.sim,con.sim){
 	
-	phat.burn <- sum(burn)/(Ntrials*length(burn))
-	phat.cont <- sum(control)/(Ntrials*length(control))
-	
-	llike.burn <- sum(dbinom(x=burn,size=Ntrials, prob=phat.burn, log=TRUE))
-	llike.cont <- sum(dbinom(x=control,size=Ntrials, prob=phat.cont, log=TRUE))
-	
-	return(sum(c(llike.burn,llike.cont)))
+	lambda.hat.burn <- sum(burn.sim)/length(burn.sim)
+	lambda.hat.con <- sum(con.sim)/length(con.sim)
+
+	llike.burn <- sum(dpois(x=burn.sim,lambda=lambda.hat.burn,log=TRUE))
+	llike.con <- sum(dpois(x=con.sim,lambda=lambda.hat.con,log=TRUE))
+	return(sum(c(llike.burn,llike.con)))
 }
 
 # Computing Gsq = -2log(Lo/L1)
-lnLo.hat <- lnLo(burn=burn.est, control=cont.est, Ntrials=N)
-lnL1.hat <- lnL1(burn=burn.est, control=cont.est, Ntrials=N)
+lnLo.hat <- lnLo(burn.sim=burn.sim,con.sim=con.sim)
+lnL1.hat <- lnL1(burn.sim=burn.sim,con.sim=con.sim)
 
 Gsq <- -2*(lnLo.hat-lnL1.hat)
-alpha <- 0.001
-Gsq.crit <- qchisq(p=1-alpha, df=3-1)
-pvalue <- 1-pchisq(q=Gsq, df=3-1)
+alpha <- 0.05
+Gsq.crit <- qchisq(p=1-alpha, df=2-1)
+pvalue <- 1-pchisq(q=Gsq, df=2-1)
 
-# Parametric bootstrapping
-boot <- 5000
-both <- c(burn.est,cont.est)
-phat.Ho <- sum(both)/(N*length(both)); # MLE under H0 = sum(xis)/sum(nis)
-Gsq.vec <- rep(0,boot)
 
-for(i in 1:boot){
-	# Simulate data like the one observed but under the Null hypothesis
-
-	burn.boot <- rbinom(n=burn, size=N, prob=phat.Ho)
-	cont.boot <- rbinom(n=control, size=N, prob=phat.Ho)
-	
-	lnLo.boot <- lnLo(burn=burn.boot, control=cont.boot, Ntrials=N)	
-	lnL1.boot <- lnL1(burn=burn.boot, control=cont.boot, Ntrials=N)		
-	
-	Gsq.vec[i] <- -2*(lnLo.boot-lnL1.boot)
-	
-}
-
-boot.pval <- sum(Gsq.vec > Gsq)/2000 # Proportion of boostrap Gsq's that are bigger than the observed Gsq
-print(boot.pval) # compare to Chisquare pvalue
-print(pvalue)
-```
-```{r, echo=FALSE}
-hist(Gsq.vec)
-abline(v=Gsq, col="red")
-```
